@@ -16,23 +16,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
-// newLoggerProvider cria um logger provider com suporte a exportação
-func newLoggerProvider(ctx context.Context, cfg Config) (*log.LoggerProvider, error) {
-	res := newResource(cfg.ServiceName, cfg.ServiceVersion)
-
-	// Cria o exportador OTLP com configurações adequadas
-	exporter, err := otlploggrpc.New(
-		ctx,
-		otlploggrpc.WithEndpoint(cfg.OTLPEndpoint),
-		otlploggrpc.WithTimeout(cfg.OTELExporterTimeout),
-	)
+// newLoggerProvider creates a new logger provider with the OTLP gRPC exporter.
+func newLoggerProvider(ctx context.Context, res *resource.Resource) (*log.LoggerProvider, error) {
+	exporter, err := otlploggrpc.New(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTLP log exporter: %w", err)
 	}
 
-	// Configura o processador em lote
 	processor := log.NewBatchProcessor(exporter)
-
 	lp := log.NewLoggerProvider(
 		log.WithProcessor(processor),
 		log.WithResource(res),
@@ -41,16 +32,9 @@ func newLoggerProvider(ctx context.Context, cfg Config) (*log.LoggerProvider, er
 	return lp, nil
 }
 
-// newMeterProvider cria um meter provider com suporte a exportação
-func newMeterProvider(ctx context.Context, cfg Config) (*metric.MeterProvider, error) {
-	res := newResource(cfg.ServiceName, cfg.ServiceVersion)
-
-	// Cria o exportador OTLP com configurações adequadas
-	exporter, err := otlpmetricgrpc.New(
-		ctx,
-		otlpmetricgrpc.WithEndpoint(cfg.OTLPEndpoint),
-		otlpmetricgrpc.WithTimeout(cfg.OTELExporterTimeout),
-	)
+// newMeterProvider creates a new meter provider with the OTLP gRPC exporter.
+func newMeterProvider(ctx context.Context, res *resource.Resource) (*metric.MeterProvider, error) {
+	exporter, err := otlpmetricgrpc.New(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTLP metric exporter: %w", err)
 	}
@@ -64,20 +48,14 @@ func newMeterProvider(ctx context.Context, cfg Config) (*metric.MeterProvider, e
 	return mp, nil
 }
 
-// newTracerProvider cria um tracer provider com suporte a exportação
-func newTracerProvider(ctx context.Context, cfg Config) (*trace.TracerProvider, error) {
-	res := newResource(cfg.ServiceName, cfg.ServiceVersion)
-
-	// Cria o exportador OTLP com configurações adequadas
-	exporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
-		otlptracegrpc.WithTimeout(cfg.OTELExporterTimeout),
-	)
+// newTracerProvider creates a new tracer provider with the OTLP gRPC exporter.
+func newTracerProvider(ctx context.Context, res *resource.Resource) (*trace.TracerProvider, error) {
+	exporter, err := otlptracegrpc.New(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
 	}
 
+	// Create Resource
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
@@ -87,7 +65,7 @@ func newTracerProvider(ctx context.Context, cfg Config) (*trace.TracerProvider, 
 	return tp, nil
 }
 
-// newResource cria um resource OTEL
+// newResource creates a new OTEL resource with the service name and version.
 func newResource(serviceName string, serviceVersion string) *resource.Resource {
 	hostName, _ := os.Hostname()
 
