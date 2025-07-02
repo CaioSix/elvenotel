@@ -3,10 +3,16 @@ package elvenotel
 import (
 	"context"
 	"fmt"
+	"time"
+
+	// "log"
 	"os"
 
+	// "github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
+	"go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -142,4 +148,71 @@ func (t *Telemetry) Shutdown(ctx context.Context) {
 	t.lp.Shutdown(ctx)
 	t.mp.Shutdown(ctx)
 	t.tp.Shutdown(ctx)
+}
+
+func IniciandoTelemetria() (TelemetryProvider, error) {
+	ctx := context.Background()
+
+	// Carrega configuração do ambiente
+	telemConfig, err := NewConfigFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load telemetry config: %v", err)
+	}
+
+	// Inicializa telemetria
+	telemetry, err := NewTelemetry(ctx, telemConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize telemetry: %v", err)
+	}
+
+	fmt.Println("Telemetria inicializada com sucesso!")
+	return telemetry, nil
+}
+
+func StartTracing(
+	ctx context.Context,
+	tp TelemetryProvider,
+	request events.APIGatewayProxyRequest,
+) context.Context {
+	ctx, span := tp.TraceStart(ctx, fmt.Sprintf("%s %s", request.HTTPMethod, request.Path))
+
+	span.SetAttributes(
+		attribute.String("http.method", request.HTTPMethod),
+		attribute.String("http.path", request.Path),
+		attribute.String("http.source_ip", request.RequestContext.Identity.SourceIP),
+		attribute.String("http.user_agent", request.RequestContext.Identity.UserAgent),
+	)
+
+	return ctx
+}
+
+// Função para registrar métricas (retorna função defer)
+func RecordMetrics(
+	ctx context.Context,
+	tp TelemetryProvider,
+) func() {
+	// Registra métrica de requisições em andamento
+	counter, err := tp.MeterInt64UpDownCounter(MetricRequestsInFlight)
+	if err != nil {
+		tp.LogErrorln("Failed to create in-flight counter:", err)
+	} else {
+		counter.Add(ctx, 1)
+	}
+
+	start := time.Now()
+
+	return func() {
+		// Finaliza contador
+		if counter != nil {
+			counter.Add(ctx, -1)
+		}
+
+		// Registra duração
+		duration := time.Since(start)
+		if hist, err := tp.MeterInt64Histogram(MetricRequestDurationMillis); err == nil {
+			hist.Record(ctx, duration.Milliseconds())
+		} else {
+			tp.LogErrorln("Failed to record duration:", err)
+		}
+	}
 }

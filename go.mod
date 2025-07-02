@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/aws/aws-lambda-go v1.49.0
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
